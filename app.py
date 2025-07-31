@@ -1,64 +1,67 @@
 import streamlit as st
 import joblib
-import csv
 import pandas as pd
 from datetime import datetime
+import csv
 import os
 
 # Load model and vectorizer
-model = joblib.load('fake_news_model.pkl')
-vectorizer = joblib.load('tfidf_vectorizer.pkl')
+model = joblib.load("fake_news_model.pkl")
+vectorizer = joblib.load("tfidf_vectorizer.pkl")
 
-# App title
+# Streamlit page config
+st.set_page_config(page_title="📰 Fake News Detector", page_icon="🕵️‍♂️", layout="centered")
+
+# Page style
+st.markdown("""
+    <style>
+    body {
+        background-color: #f2f2f2;
+    }
+    .stTextInput > div > div > input {
+        font-size: 16px;
+    }
+    .main {
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# App Title
 st.title("📰 Fake News Detector")
+st.markdown("### Detect whether a news article is **Real or Fake** using Machine Learning.")
 
-# Sidebar navigation
-page = st.sidebar.selectbox("📂 Choose Page", ["Predict News", "Admin Panel"])
+# User input
+user_input = st.text_area("🖊️ Paste your news content here:", height=200)
 
-# 🔍 PAGE 1: Prediction Page
-if page == "Predict News":
-    st.markdown("Enter the news content below to check if it's **FAKE** or **REAL**.")
-    user_input = st.text_area("Paste News Article Here:")
+# Predict Button
+if st.button("🔍 Check News"):
+    if user_input.strip() == "":
+        st.warning("⚠️ Please enter some news text.")
+    else:
+        transformed_input = vectorizer.transform([user_input])
+        prediction = model.predict(transformed_input)
+        result = "REAL" if prediction[0] == 1 else "FAKE"
 
-    if st.button("Check News"):
-        if user_input.strip() == "":
-            st.warning("⚠️ Please enter some text.")
+        # Display result
+        if result == "REAL":
+            st.success("✅ This news appears to be **REAL**.")
         else:
-            transformed_input = vectorizer.transform([user_input])
-            prediction = model.predict(transformed_input)
-            result = "REAL" if prediction[0] == 1 else "FAKE"
+            st.error("🚫 This news appears to be **FAKE**.")
 
-            if result == "REAL":
-                st.success("✅ This news is **REAL**.")
-            else:
-                st.error("🚫 This news is **FAKE**.")
+        # Save to log
+        with open("prediction_logs.csv", mode='a', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow([datetime.now(), user_input[:100], result])
 
-            # Log to CSV
-            with open("prediction_logs.csv", mode='a', newline='', encoding='utf-8') as file:
-                writer = csv.writer(file)
-                writer.writerow([datetime.now(), user_input[:100], result])
+# Download Logs Button (if logs exist)
+if os.path.exists("prediction_logs.csv"):
+    logs_df = pd.read_csv("prediction_logs.csv", header=None)
+    logs_df.columns = ["Timestamp", "News Snippet", "Prediction"]
 
-# 🛡️ PAGE 2: Admin Panel
-elif page == "Admin Panel":
-    st.subheader("🔐 Admin Login Required")
-
-    password = st.text_input("Enter Admin Password:", type="password")
-    if password == "admin123":  # Change as needed
-        st.success("✅ Access Granted")
-
-        # Load logs
-        if os.path.exists("prediction_logs.csv"):
-            df = pd.read_csv("prediction_logs.csv", header=None)
-            df.columns = ["Timestamp", "News (First 100 chars)", "Prediction"]
-
-            st.subheader("📊 Prediction Logs")
-            st.dataframe(df, use_container_width=True)
-
-            # Download button
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download Logs as CSV", csv, "prediction_logs.csv", "text/csv")
-
-        else:
-            st.info("ℹ️ No logs found yet.")
-    elif password != "":
-        st.error("❌ Incorrect password. Try again.")
+    csv_download = logs_df.to_csv(index=False).encode("utf-8")
+    st.download_button("📥 Download Prediction Logs", data=csv_download,
+                       file_name="prediction_logs.csv", mime="text/csv")
