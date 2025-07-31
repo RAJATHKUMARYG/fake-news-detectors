@@ -16,7 +16,7 @@ def load_lottie(filepath: str):
     with open(filepath, "r") as f:
         return json.load(f)
 
-lottie_animation = load_lottie("animation.json")  # animation file (download from lottiefiles.com)
+lottie_animation = load_lottie("animation.json")  # Replace with your lottie animation file
 
 # --- Custom CSS for Styling ---
 st.markdown("""
@@ -41,60 +41,52 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- Sidebar Admin Login ---
+# --- Sidebar: Admin Login ---
 st.sidebar.title("🔒 Admin Access")
 admin_password = st.sidebar.text_input("Enter Admin Password", type="password")
 
-# --- Main Page ---
+# --- Sidebar: Admin Panel ---
+if admin_password == "admin123":
+    st.sidebar.success("✅ Access Granted")
+    st.sidebar.subheader("📊 Prediction Logs")
+
+    if os.path.exists("prediction_logs.csv"):
+        df = pd.read_csv("prediction_logs.csv", header=None)
+        df.columns = ["Timestamp", "News (First 100 chars)", "Prediction"]
+
+        st.sidebar.dataframe(df, use_container_width=True)
+
+        csv_download = df.to_csv(index=False).encode('utf-8')
+        st.sidebar.download_button("📥 Download Logs", data=csv_download, file_name="prediction_logs.csv", mime="text/csv")
+    else:
+        st.sidebar.info("ℹ️ No logs found yet.")
+elif admin_password:
+    st.sidebar.error("❌ Incorrect password")
+
+# --- Main Content: Prediction Panel ---
 st.markdown('<div class="centered"><div class="title-text">📰 Fake News Detector</div></div>', unsafe_allow_html=True)
 st_lottie(lottie_animation, height=300, key="lottie")
 
-# --- Page Mode Selection ---
-page = st.selectbox("📂 Select Page", ["Predict News", "Admin Panel"])
+st.markdown('<div class="blue-box">', unsafe_allow_html=True)
+st.subheader("🔍 Enter News Content:")
+user_input = st.text_area("Paste news article here", height=200)
 
-# --- Page 1: News Prediction ---
-if page == "Predict News":
-    st.markdown('<div class="blue-box">', unsafe_allow_html=True)
-    st.subheader("🔍 Enter News Content:")
-    user_input = st.text_area("Paste news article here", height=200)
+if st.button("Detect"):
+    if user_input.strip() == "":
+        st.warning("⚠️ Please enter news content.")
+    else:
+        input_transformed = vectorizer.transform([user_input])
+        prediction = model.predict(input_transformed)
+        result = "REAL" if prediction[0] == 1 else "FAKE"
 
-    if st.button("Detect"):
-        if user_input.strip() == "":
-            st.warning("⚠️ Please enter news content.")
+        if result == "REAL":
+            st.success("✅ This news appears to be REAL.")
         else:
-            input_transformed = vectorizer.transform([user_input])
-            prediction = model.predict(input_transformed)
-            result = "REAL" if prediction[0] == 1 else "FAKE"
+            st.error("🚫 This news appears to be FAKE.")
 
-            if result == "REAL":
-                st.success("✅ This news appears to be REAL.")
-            else:
-                st.error("🚫 This news appears to be FAKE.")
+        # Log to CSV
+        with open("prediction_logs.csv", mode="a", newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow([datetime.now(), user_input[:100], result])
 
-            # Log to CSV
-            with open("prediction_logs.csv", mode="a", newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow([datetime.now(), user_input[:100], result])
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# --- Page 2: Admin Panel ---
-elif page == "Admin Panel":
-    st.subheader("🛡️ Admin Panel")
-
-    if admin_password == "admin123":
-        st.success("Access Granted ✅")
-
-        if os.path.exists("prediction_logs.csv"):
-            df = pd.read_csv("prediction_logs.csv", header=None)
-            df.columns = ["Timestamp", "News (First 100 chars)", "Prediction"]
-
-            st.dataframe(df, use_container_width=True)
-
-            # Download CSV
-            csv_download = df.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download Logs", data=csv_download, file_name="prediction_logs.csv", mime="text/csv")
-        else:
-            st.info("No logs found yet.")
-    elif admin_password:
-        st.error("Incorrect password ❌")
+st.markdown('</div>', unsafe_allow_html=True)
